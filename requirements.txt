@@ -1,4 +1,0 @@
-streamlit==1.32.2
-PyMuPDF==1.23.26
-ollama==0.1.7
-pytest==8.0.2
