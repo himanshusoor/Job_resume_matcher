@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app import extract_text_from_pdf, build_prompt, analyze_resume, get_available_models
+from app import extract_text_from_pdf, build_prompt, analyze_resume
 import io
 
 def test_build_prompt_hybrid_matching_instruction():
@@ -37,31 +37,27 @@ def test_extract_text_from_pdf_failure(mock_fitz_open):
     with pytest.raises(ValueError, match="Failed to parse PDF: Corrupt PDF"):
         extract_text_from_pdf(fake_file)
 
-@patch("app.ollama.list")
-def test_get_available_models_success(mock_ollama_list):
-    """Test fetching models when Ollama is running."""
-    mock_ollama_list.return_value = {'models': [{'name': 'llama3:latest'}, {'name': 'mistral'}]}
-    models = get_available_models()
-    assert models == ['llama3:latest', 'mistral']
-
-@patch("app.ollama.list")
-def test_get_available_models_failure(mock_ollama_list):
-    """Test handling Ollama connection failure gracefully."""
-    mock_ollama_list.side_effect = Exception("Connection refused")
-    models = get_available_models()
-    assert models == []
-
-@patch("app.ollama.generate")
-def test_analyze_resume_success(mock_ollama_generate):
-    """Test successful response from Ollama API."""
-    mock_ollama_generate.return_value = {'response': 'Analysis Result Markdown'}
-    result = analyze_resume("Test prompt", "llama3")
+@patch("app.OpenAI")
+def test_analyze_resume_success(mock_openai_class):
+    """Test successful response from OpenAI API."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = "Analysis Result Markdown"
+    mock_response.choices = [MagicMock(message=mock_message)]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_class.return_value = mock_client
+    
+    result = analyze_resume("Test prompt", "fake-api-key", "gpt-4o-mini")
     assert result == "Analysis Result Markdown"
-    mock_ollama_generate.assert_called_once_with(model="llama3", prompt="Test prompt")
+    mock_client.chat.completions.create.assert_called_once()
 
-@patch("app.ollama.generate")
-def test_analyze_resume_failure(mock_ollama_generate):
-    """Test handling error from Ollama API generate call."""
-    mock_ollama_generate.side_effect = Exception("Model not found")
-    with pytest.raises(RuntimeError, match="Failed to communicate with Ollama: Model not found"):
-        analyze_resume("Test prompt", "llama3")
+@patch("app.OpenAI")
+def test_analyze_resume_failure(mock_openai_class):
+    """Test handling error from OpenAI API call."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = Exception("API Key Invalid")
+    mock_openai_class.return_value = mock_client
+    
+    with pytest.raises(RuntimeError, match="Failed to communicate with OpenAI: API Key Invalid"):
+        analyze_resume("Test prompt", "fake-api-key", "gpt-4o-mini")

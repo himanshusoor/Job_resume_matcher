@@ -1,14 +1,11 @@
 import streamlit as st
 import fitz  # PyMuPDF
-import ollama
+from openai import OpenAI
 import logging
-import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Application state is stateless per requirement (no saving match history)
 
 def extract_text_from_pdf(pdf_file) -> str:
     """Extracts text from an uploaded PDF file."""
@@ -21,16 +18,6 @@ def extract_text_from_pdf(pdf_file) -> str:
     except Exception as e:
         logger.error(f"Error extracting text from PDF: {e}")
         raise ValueError(f"Failed to parse PDF: {str(e)}")
-
-def get_available_models() -> list:
-    """Fetches available models from local Ollama instance."""
-    try:
-        models_response = ollama.list()
-        # Ollama API response structure has models as a list of dictionaries
-        return [model['name'] for model in models_response.get('models', [])]
-    except Exception as e:
-        logger.error(f"Error connecting to Ollama: {e}")
-        return []
 
 def build_prompt(resume_text: str, job_description: str) -> str:
     """Builds the prompt for the LLM analysis."""
@@ -57,46 +44,37 @@ Format your response as a professional Markdown report, including clear headings
 """
     return prompt
 
-def analyze_resume(prompt: str, model: str) -> str:
-    """Calls Ollama to generate the analysis."""
+def analyze_resume(prompt: str, api_key: str, model: str) -> str:
+    """Calls OpenAI API to generate the analysis."""
     try:
-        logger.info(f"Sending request to Ollama using model: {model}")
-        response = ollama.generate(model=model, prompt=prompt)
-        return response.get('response', '')
+        client = OpenAI(api_key=api_key)
+        logger.info(f"Sending request to OpenAI using model: {model}")
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful expert technical recruiter."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+        )
+        return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"Error calling Ollama API: {e}")
-        raise RuntimeError(f"Failed to communicate with Ollama: {str(e)}")
+        logger.error(f"Error calling OpenAI API: {e}")
+        raise RuntimeError(f"Failed to communicate with OpenAI: {str(e)}")
 
 def main():
     st.set_page_config(page_title="AI Resume & Job Matcher", page_icon="📄", layout="wide")
     
     st.title("📄 AI Resume & Job Matcher")
-    st.markdown("Upload your resume and a job description to get a detailed fit analysis using local LLMs via Ollama.")
+    st.markdown("Upload your resume and a job description to get a detailed fit analysis using OpenAI.")
     
     # Sidebar
     st.sidebar.header("Settings & Uploads")
     
-    st.sidebar.subheader("Ollama Setup Instructions")
-    st.sidebar.info(
-        "1. Install [Ollama](https://ollama.com/)\n"
-        "2. Run `ollama serve` in your terminal\n"
-        "3. Run `ollama pull llama3` to get the default model\n"
-        "4. Refresh this page once Ollama is running"
-    )
+    # API Key Input
+    api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password", help="Your API key is only used for this session and is not saved.")
     
-    available_models = get_available_models()
-    
-    if not available_models:
-        st.sidebar.error("Could not connect to Ollama. Is it running? Ensure `ollama serve` is active.")
-        selected_model = st.sidebar.text_input("Enter model name manually:", value="llama3")
-    else:
-        # Determine default index for llama3 if present
-        default_index = 0
-        for i, m in enumerate(available_models):
-            if "llama3" in m.lower():
-                default_index = i
-                break
-        selected_model = st.sidebar.selectbox("Select Ollama Model", options=available_models, index=default_index)
+    selected_model = st.sidebar.selectbox("Select Model", options=["gpt-4o-mini", "gpt-3.5-turbo", "gpt-4o"])
 
     st.sidebar.markdown("---")
     
@@ -122,6 +100,9 @@ def main():
     
     # Main content area
     if analyze_button:
+        if not api_key:
+            st.error("Please enter your OpenAI API key in the sidebar.")
+            return
         if not resume_file:
             st.error("Please upload a resume.")
             return
@@ -144,7 +125,7 @@ def main():
         
         with st.spinner(f"Analyzing match using '{selected_model}'... This may take a minute."):
             try:
-                analysis_result = analyze_resume(prompt, selected_model)
+                analysis_result = analyze_resume(prompt, api_key, selected_model)
                 st.success("Analysis complete!")
                 
                 st.markdown("### Analysis Report")
@@ -158,7 +139,7 @@ def main():
                     mime="text/markdown"
                 )
             except RuntimeError as e:
-                st.error(f"LLM Error: {e}. Make sure Ollama is running and the model '{selected_model}' is pulled.")
+                st.error(f"API Error: {e}. Please check your API key and try again.")
                 logger.error(f"Analysis failed: {e}")
 
 if __name__ == "__main__":
