@@ -1,2 +1,17 @@
-# Job_resume_matcher
-Upload your resume, paste a job description, and get instant, AI-driven feedback. This local, privacy-first tool uses Streamlit and Ollama to extract skills, calculate a Fit Score, and suggest concrete improvements to help you land the interview.
+# AI Resume & Job Matcher
+
+A production-ready Streamlit application that uses local LLMs (via Ollama) to analyze how well a resume matches a job description. It performs hybrid matching to detect both exact keyword matches and semantic equivalents.
+
+## Features
+- **Privacy-First**: Uses local LLMs via Ollama, so your resume and job description never leave your machine.
+- **PDF Support**: Extract text directly from PDF resumes and job descriptions using PyMuPDF.
+- **Hybrid Matching**: Advanced prompt engineering ensures the LLM recognizes both exact keywords and semantic skill equivalents.
+- **Stateless Execution**: Ensures no data from previous analyses leaks into current runs.
+- **Downloadable Reports**: Export your match analysis directly to Markdown format.
+
+## Prerequisites
+
+1. Install [Ollama](https://ollama.com/)
+2. Run Ollama server:
+   ```bash
+   ollama serve
